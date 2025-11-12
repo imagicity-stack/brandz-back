@@ -36,29 +36,16 @@ app.use(
 );
 app.use(express.json());
 
-const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
-const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
-
-let razorpay = null;
-if (razorpayKeyId && razorpayKeySecret) {
-  razorpay = new Razorpay({
-    key_id: razorpayKeyId,
-    key_secret: razorpayKeySecret
-  });
-} else {
-  logNote('Razorpay credentials missing; create-order endpoint will return an error until configured.');
-}
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID ?? 'rzp_live_ReprOUvcLlsQpx',
+  key_secret: process.env.RAZORPAY_KEY_SECRET ?? 'rj0631Zd4SFgC2pKfcuTfhVV'
+});
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'brandz-back' });
 });
 
 app.post('/api/create-order', async (req, res) => {
-  if (!razorpay) {
-    res.status(500).json({ error: 'Razorpay is not configured.' });
-    return;
-  }
-
   const { amount, currency = 'INR', name, email, contactNumber, brand, message, serviceId, serviceName, categoryName } =
     req.body || {};
 
@@ -100,27 +87,25 @@ app.post('/api/create-order', async (req, res) => {
   }
 });
 
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath, { index: false }));
+app.use(express.static(distPath, { index: false }));
 
-  app.get('*', (req, res, next) => {
-    if (req.method !== 'GET' || req.path.startsWith('/api') || req.path.includes('.')) {
-      next();
-      return;
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || path.extname(req.path)) {
+    next();
+    return;
+  }
+
+  if (!fs.existsSync(indexHtmlPath)) {
+    res.status(404).send('Frontend build not found. Run "npm run build" inside the frontend project.');
+    return;
+  }
+
+  res.sendFile(indexHtmlPath, (error) => {
+    if (error) {
+      next(error);
     }
-
-    if (!fs.existsSync(indexHtmlPath)) {
-      next();
-      return;
-    }
-
-    res.sendFile(indexHtmlPath, (error) => {
-      if (error) {
-        next(error);
-      }
-    });
   });
-}
+});
 
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
